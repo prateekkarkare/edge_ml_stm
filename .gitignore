@@ -1,0 +1,23 @@
+# File types #
+##############
+*.html
+*.xml
+
+# Directories #
+###############
+_*/
+binary/
+Documentation/
+MDK-ARM/
+EWARM/
+
+
+# Specific files #
+##################
+
+
+# OS generated files #
+######################
+.DS_Store
+thumbs.db
+Icon
