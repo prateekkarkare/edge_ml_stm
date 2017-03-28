@@ -302,19 +302,14 @@ static int8_t CDC_Itf_Receive(uint8_t* Buf, uint32_t *Len)
 	numByteToCopy = (uint16_t) * Len;
     memcpy((uint8_t*)&USB_RxBuffer[USB_RxBufferStart_idx], (uint8_t*)&Buf[0], numByteToCopy);
     USB_RxBufferStart_idx = USB_RxBufferStart_idx + numByteToCopy;
-    if(USB_RxBufferStart_idx == USB_RxBufferDim)
-      USB_RxBufferStart_idx = 0;
+    //if(USB_RxBufferStart_idx == USB_RxBufferDim)
+    USB_RxBufferStart_idx = 0;
    // BSP_LED_On(LED1);
   }
 
-  char dataOutTest[1];
-  //dataReceiveFromHostComplete = 1;
-  //CDC_Fill_Buffer(USB_RxBuffer, numByteToCopy);
-  sprintf(dataOutTest, "%c", numByteToCopy);
-  CDC_Fill_Buffer(dataOutTest, 1);
-  // Initiate next USB packet transfer
+  dataReceiveFromHostComplete = 1;
+ // Initiate next USB packet transfer
   USBD_CDC_ReceivePacket(&USBD_Device);
-  //BSP_LED_Off(LED1);
   return (USBD_OK);
 }
 
@@ -337,10 +332,9 @@ static int8_t CDC_Itf_Receive(uint8_t* Buf, uint32_t *Len)
  * so we transfer data until they are the same or the rx buffer is full.  We
  * wrap our down counter the same way the DMA does in circular mode.
  */
-
+/*
 uint8_t Read_Rx_Buffer(char *instring, uint32_t count)
 {
-	BSP_LED_On(LED1);
     uint32_t bytesread = 0;
 //  extern USBD_CDC_ItfTypeDef  USBD_Interface_fops_FS;
     if(count > bytesread)
@@ -360,6 +354,19 @@ uint8_t Read_Rx_Buffer(char *instring, uint32_t count)
     HAL_Delay(500);
     BSP_LED_Off(LED1);
     return (int)bytesread;
+}
+*/
+
+uint8_t Read_Header()
+{
+	uint8_t header = USB_RxBuffer[4];
+	return header;
+}
+
+uint32_t Read_SizeOfData(void)
+{
+	int dataSize = USB_RxBuffer[0] + (USB_RxBuffer[1] << 8) + (USB_RxBuffer[2] << 16) + (USB_RxBuffer[3] << 24);
+	return dataSize;
 }
 
 /*

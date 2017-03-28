@@ -200,27 +200,25 @@ int main( void )
       Accelero_Sensor_Handler( LSM6DSM_X_0_handle );
       */
 
-	  /*
+	  char dataOutTest[256];
 	  if (dataReceiveFromHostComplete == 1)
 	  {
-		  Read_Rx_Buffer(sizeOfData, 4);		//Read the size of incoming data
-	      Read_Rx_Buffer(&header, 1);			//read the header (Just one character for now)
+		  BSP_LED_On(LED1);
+		  char header;
+		  uint32_t sizeOfData;
 
-	      //convert the size of data to an integer
-	      int dataSize = sizeOfData[0] + (sizeOfData[1] << 8) + (sizeOfData[2] << 16) + (sizeOfData[3] << 24);
-
-	      // Create array == size of data to store the incoming data
-	      int8_t data[dataSize];
-	      Read_Rx_Buffer(data, dataSize);
+		  header = Read_Header();
+		  sizeOfData = Read_SizeOfData();
 
 	      //Set the data received flag to 0
 	      dataReceiveFromHostComplete = 0;
-
-
-	      CDC_Fill_Buffer(data, dataSize);
-
+	      sprintf(dataOutTest, "%d", sizeOfData);
+	      CDC_Fill_Buffer(header, 1);
+	      CDC_Fill_Buffer(dataOutTest, strlen(dataOutTest));
+	      HAL_Delay(1000);
+	      BSP_LED_Off(LED1);
 	  }
-		*/
+
 
 
     // Go to Sleep

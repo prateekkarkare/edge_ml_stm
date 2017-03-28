@@ -2,6 +2,9 @@
 ##############
 *.html
 *.xml
+*.o
+*.bin
+*.elf
 
 # Directories #
 ###############
