@@ -67,18 +67,17 @@ uint8_t UserRxBuffer[APP_RX_DATA_SIZE];/* Received Data over USB are stored in t
 uint8_t UserTxBuffer[APP_TX_DATA_SIZE];/* Received Data over UART (CDC interface) are stored in this buffer */
 uint32_t BuffLength;
 
-uint32_t UserTxBufPtrIn = 0;/* Increment this pointer or roll it back to
+uint32_t UserTxBufPtrIn = 0;	/* Increment this pointer or roll it back to
                                start address when data are received over USART */
-uint32_t UserTxBufPtrOut = 0; /* Increment this pointer or roll it back to
+uint32_t UserTxBufPtrOut = 0; 	/* Increment this pointer or roll it back to
                                  start address when data are sent over USB */
 
-//Prateek
-uint8_t dataReceiveComplete = 0;
+//This is asserted high by receive_complete function
+uint8_t packetReceiveComplete = 0;
 
 volatile uint8_t USB_RxBuffer[USB_RxBufferDim];
 volatile uint16_t USB_RxBufferStart_idx = 0;
-volatile uint16_t USB_RxBufferStart_idx_prev = 0;
-volatile uint16_t packet_start = 0;
+volatile uint16_t packet_start = 0;		//Tracks the start of every packet
 volatile uint16_t sizeOfData;
 volatile uint16_t headerSize = 3;		//This includes the character header + payload size indicator (2 bytes)
 
@@ -278,6 +277,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 
 /**
+  * @brief  This function reads the size of data from the header and asserts
+  * 		dataReceiveComplete high when the whole data packet is received.
+  * @param  None
+  * @retval None
+  */
+void receive_complete(void)
+{
+	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[packet_start+1] << 8);
+
+	if (USB_RxBufferStart_idx == (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE)
+	{
+		packet_start = (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE;
+		packetReceiveComplete = 1;
+	} else {
+	    packetReceiveComplete = 0;
+	}
+}
+
+
+/**
   * @brief  CDC_Itf_DataRx
   *         Data received over USB OUT endpoint are sent over CDC interface 
   *         through this function.
@@ -310,28 +329,18 @@ static int8_t CDC_Itf_Receive(uint8_t* Buf, uint32_t *Len)
   //Check for complete packet receive
   receive_complete();
 
-  CDC_Fill_Buffer(&sizeOfData, 2);
-  CDC_Fill_Buffer(&packet_start, 2);
-
   // Initiate next USB packet transfer
   USBD_CDC_ReceivePacket(&USBD_Device);
   return (USBD_OK);
 }
 
-void receive_complete(void)
+char read_header_char(void)
 {
-	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[packet_start+1] << 8);
-
-	if (USB_RxBufferStart_idx == (USB_RxBufferStart_idx_prev + sizeOfData + headerSize) % APP_RX_DATA_SIZE)
-	{
-		packet_start = (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE;
-		USB_RxBufferStart_idx_prev = USB_RxBufferStart_idx;
-		dataReceiveComplete = 1;
-	} else {
-	    dataReceiveComplete = 0;
-	}
+	char header = '\0';
+	//Added buffer size to packet_start-size of data to avoid taking a modulo of a negative number
+	header = USB_RxBuffer[(APP_RX_DATA_SIZE + packet_start - sizeOfData - 1) % APP_RX_DATA_SIZE];
+	return header;
 }
-
 
 uint8_t Read_Rx_Buffer(uint8_t *read_arr, uint16_t start_idx, uint16_t count)
 {

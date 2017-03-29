@@ -168,11 +168,6 @@ int main( void )
   //Just enable Accelerometer
   BSP_ACCELERO_Sensor_Enable( LSM6DSM_X_0_handle );
   
-  //to send to output
-  //static char dataOutTest[256];
-  //Store the header of incoming data packet
-  //Counter to track start index
-  uint16_t start_index = 0;
 
   while (1)
   {
@@ -197,29 +192,18 @@ int main( void )
       
       Accelero_Sensor_Handler( LSM6DSM_X_0_handle );
       */
-/*
-	  char dataOutTest[128];
 
-	  if ()
+	  //char dataOutTest[128];
+
+	  if (packetReceiveComplete)
 	  {
-		  BSP_LED_On(LED1);
-		  char header[5];
-		  int sizeOfData;
-		  start_index = Read_Rx_Buffer(header, start_index, 5);
-		  sizeOfData = header[0] + (header[1] << 8) + (header[2] << 16) + (header[3] << 24);
-		  uint8_t numArray[20];
-		  sprintf(dataOutTest, "Start Index: %d\n", start_index);
-		  CDC_Fill_Buffer(dataOutTest, strlen(dataOutTest));
-		  start_index = Read_Rx_Buffer(numArray, start_index, sizeOfData);
-	      //Set the data received flag to 0
-	      dataReceiveFromHostComplete = 0;
-	      sprintf(dataOutTest, "Header: %c Index: %d Size: %d\n", header[4], start_index, sizeOfData);
-	      memset(&numArray[0], 0, sizeof(numArray));
-	      CDC_Fill_Buffer(dataOutTest, strlen(dataOutTest));
-	      HAL_Delay(1000);
-	      BSP_LED_Off(LED1);
+		  char header = read_header_char();
+		  packetReceiveComplete = 0;
+		  CDC_Fill_Buffer(&header, 1);
 	  }
-*/
+
+
+
     // Go to Sleep
     __WFI();
 
