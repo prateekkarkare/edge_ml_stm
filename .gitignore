@@ -5,6 +5,7 @@
 *.o
 *.bin
 *.elf
+*.map
 
 # Directories #
 ###############

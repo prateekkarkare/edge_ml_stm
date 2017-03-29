@@ -73,11 +73,14 @@ uint32_t UserTxBufPtrOut = 0; /* Increment this pointer or roll it back to
                                  start address when data are sent over USB */
 
 //Prateek
-volatile uint16_t readIndex = APP_RX_DATA_SIZE;
-uint8_t dataReceiveFromHostComplete = 0;
+uint8_t dataReceiveComplete = 0;
 
 volatile uint8_t USB_RxBuffer[USB_RxBufferDim];
 volatile uint16_t USB_RxBufferStart_idx = 0;
+volatile uint16_t USB_RxBufferStart_idx_prev = 0;
+volatile uint16_t packet_start = 0;
+volatile uint16_t sizeOfData;
+volatile uint16_t headerSize = 3;		//This includes the character header + payload size indicator (2 bytes)
 
 /* TIM handler declaration */
 TIM_HandleTypeDef  TimHandle;
@@ -284,7 +287,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   */
 static int8_t CDC_Itf_Receive(uint8_t* Buf, uint32_t *Len)
 {
-  uint8_t numByteToCopy;
+  uint16_t numByteToCopy;
   if(((USB_RxBufferStart_idx) + (uint16_t)*Len) > USB_RxBufferDim)
   {
     numByteToCopy = USB_RxBufferDim - (USB_RxBufferStart_idx);
@@ -295,24 +298,60 @@ static int8_t CDC_Itf_Receive(uint8_t* Buf, uint32_t *Len)
     numByteToCopy = (uint16_t)(*Len - numByteToCopy);
     memcpy((uint8_t*)&USB_RxBuffer[USB_RxBufferStart_idx], (uint8_t*)&Buf[Buf_idx], numByteToCopy);
     USB_RxBufferStart_idx = numByteToCopy;
-    //BSP_LED_On(LED1);
   }
   else
   {
 	numByteToCopy = (uint16_t) * Len;
     memcpy((uint8_t*)&USB_RxBuffer[USB_RxBufferStart_idx], (uint8_t*)&Buf[0], numByteToCopy);
-    USB_RxBufferStart_idx = USB_RxBufferStart_idx + numByteToCopy;
-    //if(USB_RxBufferStart_idx == USB_RxBufferDim)
-    USB_RxBufferStart_idx = 0;
-   // BSP_LED_On(LED1);
-  }
+    //USB_RxBufferStart_idx always points to the immediate next element after the last written byte
+    USB_RxBufferStart_idx = (USB_RxBufferStart_idx + numByteToCopy) % APP_RX_DATA_SIZE;
+   }
 
-  dataReceiveFromHostComplete = 1;
- // Initiate next USB packet transfer
+  //Check for complete packet receive
+  receive_complete();
+
+  CDC_Fill_Buffer(&sizeOfData, 2);
+  CDC_Fill_Buffer(&packet_start, 2);
+
+  // Initiate next USB packet transfer
   USBD_CDC_ReceivePacket(&USBD_Device);
   return (USBD_OK);
 }
 
+void receive_complete(void)
+{
+	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[packet_start+1] << 8);
+
+	if (USB_RxBufferStart_idx == (USB_RxBufferStart_idx_prev + sizeOfData + headerSize) % APP_RX_DATA_SIZE)
+	{
+		packet_start = (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE;
+		USB_RxBufferStart_idx_prev = USB_RxBufferStart_idx;
+		dataReceiveComplete = 1;
+	} else {
+	    dataReceiveComplete = 0;
+	}
+}
+
+
+uint8_t Read_Rx_Buffer(uint8_t *read_arr, uint16_t start_idx, uint16_t count)
+{
+	if(start_idx + count > USB_RxBufferStart_idx)
+	{
+		uint16_t newCount = USB_RxBufferStart_idx - start_idx;
+		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], newCount);
+		start_idx = USB_RxBufferStart_idx;
+	} else if (start_idx + count > APP_RX_DATA_SIZE) {
+		uint16_t newCount = APP_RX_DATA_SIZE - start_idx;
+		uint16_t newCount2 = count - newCount;
+		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], newCount);
+		memcpy((uint8_t *)&read_arr[newCount], (uint8_t *)&USB_RxBuffer[0], newCount2);
+		start_idx = newCount2;
+	}	else {
+		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], count);
+		start_idx=start_idx+count;
+	}
+	return start_idx;
+}
 
 /*
  * the Read_Rx_Buffer() routine returns any characters that have been placed into
@@ -356,7 +395,7 @@ uint8_t Read_Rx_Buffer(char *instring, uint32_t count)
     return (int)bytesread;
 }
 */
-
+/*
 uint8_t Read_Header()
 {
 	uint8_t header = USB_RxBuffer[4];
@@ -368,6 +407,7 @@ uint32_t Read_SizeOfData(void)
 	int dataSize = USB_RxBuffer[0] + (USB_RxBuffer[1] << 8) + (USB_RxBuffer[2] << 16) + (USB_RxBuffer[3] << 24);
 	return dataSize;
 }
+*/
 
 /*
 uint8_t Read_Rx_Buffer(char *instring)

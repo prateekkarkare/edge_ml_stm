@@ -73,16 +73,12 @@
 extern USBD_CDC_ItfTypeDef  USBD_CDC_fops;
 
 /* Exported macro ------------------------------------------------------------*/
-uint8_t dataReceiveFromHostComplete;
-uint8_t USB_Rx_Buffer;
+//uint16_t USB_RxBufferStart_idx;
+
 /* Exported functions ------------------------------------------------------- */
 uint8_t CDC_Fill_Buffer(uint8_t* Buf, uint32_t TotalLen);
 
-uint32_t Read_SizeOfData(void);
-uint8_t Read_Header(void);
-//uint8_t Read_Rx_Buffer(char *instring, uint32_t count);
-//uint8_t Read_Rx_Buffer(char *rxString);
-
+uint8_t Read_Rx_Buffer(uint8_t *read_arr, uint16_t start_idx, uint16_t count);
 #endif /* __USBD_CDC_IF_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
