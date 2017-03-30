@@ -78,6 +78,8 @@ uint8_t packetReceiveComplete;
 /* Exported functions ------------------------------------------------------- */
 uint8_t CDC_Fill_Buffer(uint8_t* Buf, uint32_t TotalLen);
 char read_header_char();
+void read_data(uint8_t *data_array);
+uint16_t get_sizeOfData(void);
 
 #endif /* __USBD_CDC_IF_H */
 

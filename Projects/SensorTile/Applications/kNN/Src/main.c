@@ -90,9 +90,6 @@ static void RTC_Config( void );
 static void RTC_TimeStampConfig( void );
 static void initializeAllSensors( void );
 
-//Semihosting feature
-//extern void initialise_monitor_handles(void);
-
 
 /* Private functions ---------------------------------------------------------*/
  
@@ -198,8 +195,13 @@ int main( void )
 	  if (packetReceiveComplete)
 	  {
 		  char header = read_header_char();
+		  uint32_t dataSize = get_sizeOfData();
+		  uint8_t data[dataSize];
+		  read_data(&data);
 		  packetReceiveComplete = 0;
-		  CDC_Fill_Buffer(&header, 1);
+		  CDC_Fill_Buffer(&data, dataSize);
+		  //CDC_Fill_Buffer(&bytesRead, 2);
+		  //CDC_Fill_Buffer(&header, 1);
 	  }
 
 

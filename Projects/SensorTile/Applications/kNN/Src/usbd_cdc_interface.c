@@ -230,7 +230,6 @@ static int8_t CDC_Itf_Control (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 uint8_t CDC_Fill_Buffer(uint8_t* Buf, uint32_t TotalLen)
 {
   uint16_t i;
-  
   for (i = 0; i < TotalLen; i++)
   {
     UserTxBuffer[UserTxBufPtrIn] = Buf[i];
@@ -342,25 +341,30 @@ char read_header_char(void)
 	return header;
 }
 
-uint8_t Read_Rx_Buffer(uint8_t *read_arr, uint16_t start_idx, uint16_t count)
+uint16_t get_sizeOfData(void)
 {
-	if(start_idx + count > USB_RxBufferStart_idx)
-	{
-		uint16_t newCount = USB_RxBufferStart_idx - start_idx;
-		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], newCount);
-		start_idx = USB_RxBufferStart_idx;
-	} else if (start_idx + count > APP_RX_DATA_SIZE) {
-		uint16_t newCount = APP_RX_DATA_SIZE - start_idx;
-		uint16_t newCount2 = count - newCount;
-		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], newCount);
-		memcpy((uint8_t *)&read_arr[newCount], (uint8_t *)&USB_RxBuffer[0], newCount2);
-		start_idx = newCount2;
-	}	else {
-		memcpy((uint8_t *)&read_arr[0], (uint8_t *)&USB_RxBuffer[start_idx], count);
-		start_idx=start_idx+count;
-	}
-	return start_idx;
+	return sizeOfData;
 }
+
+void read_data(uint8_t* data_array)
+{
+//	CDC_Fill_Buffer(&USB_RxBuffer[0], 259);
+	int16_t ind=(packet_start - sizeOfData);
+	if (ind > 0)
+	{
+//		CDC_Fill_Buffer(&ind, 2);
+//		CDC_Fill_Buffer(&sizeOfData, 2);
+		memcpy((uint8_t *)&data_array[0], (uint8_t *)&USB_RxBuffer[ind], sizeOfData);
+//		CDC_Fill_Buffer(&data_array, sizeOfData);
+//		CDC_Fill_Buffer(&USB_RxBuffer[ind], sizeOfData);
+	} else {
+		memcpy((uint8_t *)&data_array[0], (uint8_t *)&USB_RxBuffer[APP_RX_DATA_SIZE+ind], -ind);
+		memcpy((uint8_t *)&data_array[-ind], (uint8_t *)&USB_RxBuffer[0], ((int16_t) sizeOfData + ind));
+	}
+	//return sizeOfData;
+}
+
+
 
 /*
  * the Read_Rx_Buffer() routine returns any characters that have been placed into
