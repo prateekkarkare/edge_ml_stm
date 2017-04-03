@@ -18,7 +18,7 @@ EWARM/
 
 # Specific files #
 ##################
-
+Projects\SensorTile\Applications\kNN\SW4STM32\STM32L4xx-SensorTile\Release\output.map
 
 # OS generated files #
 ######################
