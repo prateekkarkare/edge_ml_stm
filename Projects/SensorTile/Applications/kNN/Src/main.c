@@ -91,7 +91,6 @@ static void RTC_TimeStampConfig( void );
 static void initializeAllSensors( void );
 
 /* Functions created by Prateek ----------------------------------------------*/
-void addConstant(uint8_t *data, uint8_t scalar, uint32_t dataSize);
 uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes);
 
 
@@ -170,12 +169,16 @@ int main( void )
   BSP_ACCELERO_Sensor_Enable( LSM6DSM_X_0_handle );
 
 /*********************************************
+ TODO: need to get these variables at the right places
  */
-uint32_t meansSize=0;
-uint32_t testSize=0;
+uint32_t meansSize = 0;
+uint32_t testSize = 0;
+uint32_t usbTestDataSize = 0;
+uint8_t *usbTestptr;
 uint8_t *meansptr;
 uint8_t *testptr;
 uint8_t *classes;
+
 //
 
   while (1)
@@ -205,28 +208,36 @@ uint8_t *classes;
 	  if (packetsReceived > 0)
 	  {
 		  char header = read_header_char();
-		  if (header == 'a')
+		  switch (header)
 		  {
-			  meansSize = get_sizeOfData();
-			  meansptr = (uint8_t *) malloc(meansSize);
-		      read_data(meansptr);
-			  packetsReceived--;
-		  } else if (header == 'b') {
-			  testSize = get_sizeOfData();
-			  testptr = (uint8_t *) malloc(testSize);
-			  read_data(testptr);
-			  packetsReceived--;
-			  //CDC_Fill_Buffer(testptr, testSize);
+		  	  case 'a' :										/* Fetching the Means array */
+		  		  meansSize = get_sizeOfData();					/* Get the size of pay-load */
+		  		  meansptr = (uint8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
+		  		  read_data(meansptr);
+		  		  packetsReceived--;
+		  		  break;
+		  	  case 'b' :
+		  		  testSize = get_sizeOfData();
+		  		  testptr = (uint8_t *) malloc(testSize);
+		  		  read_data(testptr);
+		  		  packetsReceived--;
 
-			  uint32_t j = 0;
-			  classes = (uint8_t *) malloc(testSize);
-			  for (j = 0; j < testSize; j++)
-			  {
-				  classes[j] = classify(*testptr, meansptr, meansSize);
-				  //CDC_Fill_Buffer(meansptr, 6);
-				  testptr++;
-			  }
-			  CDC_Fill_Buffer(classes, testSize);
+		  		  uint32_t j = 0;
+		  		  classes = (uint8_t *) malloc(testSize);
+		  		  for (j = 0; j < testSize; j++)
+		  		  {
+		  			  classes[j] = classify(*testptr, meansptr, meansSize);
+		  			  testptr++;
+		  		  }
+		  		  CDC_Fill_Buffer(classes, testSize);
+		  		  break;
+		  	  case 'c' :
+		  		  usbTestDataSize = get_sizeOfData();
+		  		  usbTestptr = (uint8_t *) malloc(usbTestDataSize);
+		  		  read_data(usbTestptr);
+		  		  packetsReceived--;
+		  		  CDC_Fill_Buffer(usbTestptr, usbTestDataSize);
+		  		  break;
 		  }
 	  }
 
@@ -246,7 +257,6 @@ uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes)
 	uint8_t distance;
 	uint8_t mindistance = 255;
 	uint8_t predictedClass = 0;
-	//CDC_Fill_Buffer(meansArray, 1);
 	for (i = 0; i < classes; i++)
 	{
 		distance = abs(testPoint - *meansArray);
@@ -257,18 +267,9 @@ uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes)
 		}
 		meansArray++;
 	}
-	//CDC_Fill_Buffer(&predictedClass, 1);
 	return predictedClass;
 }
 
-void addConstant(uint8_t *data, uint8_t scalar, uint32_t dataSize)
-{
-	uint32_t arrayLength = dataSize;
-	for (uint32_t i=0; i < arrayLength; i++)
-	{
-		data[i] = data[i] + scalar;
-	}
-}
 
 /**
 * @brief  Initialize all sensors
