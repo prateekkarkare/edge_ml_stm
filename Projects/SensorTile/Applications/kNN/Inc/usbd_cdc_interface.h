@@ -73,7 +73,7 @@
 extern USBD_CDC_ItfTypeDef  USBD_CDC_fops;
 
 /* Exported macro ------------------------------------------------------------*/
-uint8_t packetReceiveComplete;
+uint8_t packetsReceived;
 
 /* Exported functions ------------------------------------------------------- */
 uint8_t CDC_Fill_Buffer(uint8_t* Buf, uint32_t TotalLen);

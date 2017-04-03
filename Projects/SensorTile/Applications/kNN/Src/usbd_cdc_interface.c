@@ -72,8 +72,8 @@ uint32_t UserTxBufPtrIn = 0;	/* Increment this pointer or roll it back to
 uint32_t UserTxBufPtrOut = 0; 	/* Increment this pointer or roll it back to
                                  start address when data are sent over USB */
 
-//This is asserted high by receive_complete function
-uint8_t packetReceiveComplete = 0;
+//This is incremented by receive_complete function
+uint8_t packetsReceived = 0;
 
 volatile uint8_t USB_RxBuffer[USB_RxBufferDim];
 volatile uint16_t USB_RxBufferStart_idx = 0;
@@ -232,8 +232,8 @@ uint8_t CDC_Fill_Buffer(uint8_t* Buf, uint32_t TotalLen)
   uint16_t i;
   for (i = 0; i < TotalLen; i++)
   {
-    UserTxBuffer[UserTxBufPtrIn] = Buf[i];
-    UserTxBufPtrIn = (UserTxBufPtrIn + 1) % APP_RX_DATA_SIZE;
+	  UserTxBuffer[UserTxBufPtrIn] = Buf[i];
+	  UserTxBufPtrIn = (UserTxBufPtrIn + 1) % APP_RX_DATA_SIZE;
   }
   return (USBD_OK);
 }
@@ -284,13 +284,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void receive_complete(void)
 {
 	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[packet_start+1] << 8);
-
+	uint8_t prev_numpac=packetsReceived;
 	if (USB_RxBufferStart_idx == (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE)
 	{
 		packet_start = (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE;
-		packetReceiveComplete = 1;
+		packetsReceived++;
 	} else {
-	    packetReceiveComplete = 0;
+	    packetsReceived = prev_numpac;
 	}
 }
 
@@ -346,22 +346,17 @@ uint16_t get_sizeOfData(void)
 	return sizeOfData;
 }
 
-void read_data(uint8_t* data_array)
+void read_data(uint8_t *data_array)
 {
 //	CDC_Fill_Buffer(&USB_RxBuffer[0], 259);
 	int16_t ind=(packet_start - sizeOfData);
 	if (ind > 0)
 	{
-//		CDC_Fill_Buffer(&ind, 2);
-//		CDC_Fill_Buffer(&sizeOfData, 2);
 		memcpy((uint8_t *)&data_array[0], (uint8_t *)&USB_RxBuffer[ind], sizeOfData);
-//		CDC_Fill_Buffer(&data_array, sizeOfData);
-//		CDC_Fill_Buffer(&USB_RxBuffer[ind], sizeOfData);
 	} else {
 		memcpy((uint8_t *)&data_array[0], (uint8_t *)&USB_RxBuffer[APP_RX_DATA_SIZE+ind], -ind);
 		memcpy((uint8_t *)&data_array[-ind], (uint8_t *)&USB_RxBuffer[0], ((int16_t) sizeOfData + ind));
 	}
-	//return sizeOfData;
 }
 
 
