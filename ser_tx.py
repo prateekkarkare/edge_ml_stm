@@ -27,7 +27,7 @@ def checkUSBComm(port):
 	# Create test array by providing a range
 	testData = numpy.int8(range(0,257))
 	# Construct a struct to send 
-	cmd = createPacket('c', testData, 1)
+	cmd = createPacket('x', testData, 1)
 	sentData = ser.write(cmd)
 	print "Sent " + str(sentData-3) + " bytes of data for USB communication check" 
 	#print struct.unpack('Hc%sb' % len(testData), cmd)
@@ -66,30 +66,33 @@ timeout = time.time() + 5   # 5 minutes from now
 def checkData(port):
 	ser = openSerialPort(port)
 	# Create test array of int8 by providing a range
-	test = numpy.int8(numpy.random.random_integers(0, 100, (3, 10)))
+	test = numpy.random.randint(0, 100, (3, 10), dtype='int8')
 	Xmeans = numpy.int8([0,20,40,60,80,100])
 	Ymeans = numpy.int8([1,21,41,61,81,101])
 	Zmeans = numpy.int8([2,22,42,62,82,102])
 	means = numpy.vstack((Xmeans, Ymeans, Zmeans))
+	classes = numpy.int8(numpy.random.choice(len(Xmeans), len(Xmeans), replace=False))
+	classpkt = createPacket('c', classes, 1)
 	meanspkt = createPacket('a', means.flatten(), 1)
 	testpkt = createPacket('b', test.flatten(), 1)
 	classification = []
-	classify(test, means)
+	classify(test, means, classes)
 	#for point in test:
 	#	 classification.append(computeDistances(point, means)[0])
 	print "Writing data to MCU..."
 	ser.write(meanspkt)
 	time.sleep(1)
-	#print ser.inWaiting()
+	ser.write(classpkt)
+	time.sleep(1)
 	ser.write(testpkt)
 	time.sleep(1)
 	#print ser.inWaiting()
 	rxData = []
 	while True:
-		r = ser.read(4)
+		r = ser.read()
 		#print r
 		if (r != ''):
-			out = struct.unpack('i', r)
+			out = struct.unpack('b', r)
 			#print out
 			rxData.append(out[0])
 		if (time.time() > timeout):
@@ -100,20 +103,22 @@ def checkData(port):
 	if ((classification == rxData)):
 		print "Equal"
 
-def classify(testArray, meansArray):
+def classify(testArray, meansArray, classes):
 	for i in range(len(testArray[0])):
 		point = [testArray[0][i], testArray[1][i], testArray[2][i]]
-		print computeDistances(point, meansArray), point
+		print computeDistances(point, meansArray, classes), point
 
-def computeDistances(testPoint, meansArray):
+def computeDistances(testPoint, meansArray, classes):
 	mindistance = 174
 	minmean = -1
+	predictedClass = -1
 	for i in range(len(meansArray[0])):
-		distance = math.sqrt((testPoint[0] - meansArray[0][i])**2 + (testPoint[1] - meansArray[1][i])**2 + (testPoint[2] - meansArray[2][i])**2)
+		distance = numpy.int32(math.sqrt((testPoint[0] - meansArray[0][i])**2 + (testPoint[1] - meansArray[1][i])**2 + (testPoint[2] - meansArray[2][i])**2))
 		if (distance < mindistance):
 			mindistance = distance
 			minmean = [meansArray[0][i], meansArray[1][i], meansArray[2][i]]
-	return [minmean, mindistance]	
+			predictedClass = classes[i]
+	return [minmean, mindistance, predictedClass]	
 		
 def main():
 #	checkUSBComm(port)

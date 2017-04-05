@@ -93,9 +93,8 @@ static void RTC_TimeStampConfig( void );
 static void initializeAllSensors( void );
 
 /* Functions created by Prateek ----------------------------------------------*/
-uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes);
-void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize);
-void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize);
+void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray);
+uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize, uint8_t *classPtr);
 uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint);
 void incrementDimensionPtr(uint8_t **dimPtr);
 
@@ -179,13 +178,12 @@ int main( void )
 uint32_t meansSize = 0;
 uint32_t testSize = 0;
 uint32_t usbCommTestSize = 0;
+uint32_t classSize = 0;
 uint8_t *usbCommTestPtr;
 uint8_t *meansptr;
 uint8_t *testptr;
-uint8_t *classes;
-uint8_t *meansDimensionPtr[DATA_DIM];
-uint8_t *testDimensionPtr[DATA_DIM];
-
+uint8_t *classptr;
+uint8_t *predictedClassPtr;
 //
 
   while (1)
@@ -222,10 +220,6 @@ uint8_t *testDimensionPtr[DATA_DIM];
 		  		  meansptr = (uint8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
 		  		  read_data(meansptr);
 		  		  packetsReceived--;
-		  		  for (uint8_t i = 0; i < DATA_DIM; i++)
-		  		  {
-		  			  meansDimensionPtr[i] = meansptr + (i*meansSize)/DATA_DIM;
-		  		  }
 		  		  //CDC_Fill_Buffer(dimensionPtr[0], meansSize/3);
 		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
 		  		  break;
@@ -234,21 +228,21 @@ uint8_t *testDimensionPtr[DATA_DIM];
 		  		  testptr = (uint8_t *) malloc(testSize);
 		  		  read_data(testptr);
 		  		  packetsReceived--;
-		  		  for (uint8_t i = 0; i < DATA_DIM; i++)
-		  		  {
-		  			  testDimensionPtr[i] = testptr + (i*testSize)/DATA_DIM;
-		  		  }
-		  		  kNNclassify (testptr, testSize, meansptr, meansSize);
-		  		  /*uint32_t j = 0;
-		  		  classes = (uint8_t *) malloc(testSize);
-		  		  for (j = 0; j < testSize; j++)
-		  		  {
-		  			  classes[j] = classify(*testptr, meansptr, meansSize);
-		  			  testptr++;
-		  		  }*/
-		  		  //CDC_Fill_Buffer(classes, testSize);
+
+		  		  predictedClassPtr = (uint8_t *) malloc(testSize/DATA_DIM);
+		  		  kNNclassify (testptr, testSize, meansptr, meansSize, classptr, predictedClassPtr);
+
+		  		  CDC_Fill_Buffer(predictedClassPtr, testSize/DATA_DIM);
 		  		  break;
-		  	  case 'c' :
+		  	  case 'c' :										/* Fetching the Classes array */
+		  		  classSize = get_sizeOfData();					/* Get the size of pay-load */
+		  		  classptr = (uint8_t *) malloc(classSize);		/* Allocate memory for the class array to avoid garbles and overwrite */
+		  		  read_data(classptr);
+		  		  packetsReceived--;
+		  		  //CDC_Fill_Buffer(&classptr[1], 1);
+		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
+		  		  break;
+		  	  case 'x' :
 		  		  usbCommTestSize = get_sizeOfData();
 		  		  usbCommTestPtr = (uint8_t *) malloc(usbCommTestSize);
 		  		  read_data(usbCommTestPtr);
@@ -264,8 +258,14 @@ uint8_t *testDimensionPtr[DATA_DIM];
   }
 }
 
-void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize)
+void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray)
 {
+	/* Create local pointer array which points to each the start of points for each dimension
+	 * Ex. [x1 x2 x3 y4 y1 y2 y3 y4 z1 z2 z3 z4 ...... k1 k2 k3 k4]
+	 * *localPointerArray[0] ----(points to)---> x1
+	 * *localPointerArray[1] ----(points to)---> y1
+	 * *localPointerArray[2] ----(points to)---> z1
+	 */
 	uint8_t *testDimPtr[DATA_DIM];
 	for (uint8_t i = 0; i < DATA_DIM; i++)
 	{
@@ -275,15 +275,31 @@ void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint
 	for (uint32_t i = 0; i < testSize/DATA_DIM; i++)
 	{
 		//CDC_Fill_Buffer(*testDimPtr, 1);
-		calculateMinDistance(testDimPtr, meansdata, meansSize);
+		predictedClassArray[i] = calculateMinDistance(testDimPtr, meansdata, meansSize, classes);
 		incrementDimensionPtr(testDimPtr);
 	}
 }
 
-void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize)
-{
-	//CDC_Fill_Buffer(point[0], 1);
+/**
+ * @ Brief:	 This function calculates the minimum distance between a point and a set of points (means array)
+ * 			 The point/means passed to this function could be N dimensional
+ * @ Param1: Requires a pointer to a pointer array each element of which points to the i'th dimension
+ * 			 of the test point (eg. point = [x1, y1, z1, k1, u1]
+ * 			 pointer[2] -----> [y1], pointer[3] -----> [z1]
+ * @ Param2: pointer to means array
+ * TODO @ Param3: Means size (this is required here because meansSize is not a global var
+ * @ Param3: Pointer to original class array
+ * @ Return: returns the predicted class for that point
+ */
 
+uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize, uint8_t *classPtr)
+{
+	/* Create local pointer array which points to each the start of points for each dimension
+	 * Ex. [x1 x2 x3 y4 y1 y2 y3 y4 z1 z2 z3 z4 ...... k1 k2 k3 k4]
+	 * *localPointerArray[0] ----(points to)---> x1
+	 * *localPointerArray[1] ----(points to)---> y1
+	 * *localPointerArray[2] ----(points to)---> z1
+	 */
 	uint8_t *meansDimPtr[DATA_DIM];
 	for (uint8_t i = 0; i < DATA_DIM; i++)
 	{
@@ -291,13 +307,19 @@ void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSi
 	}
 
 	uint32_t distance = 0;
+	uint32_t minDistance = UINT32_MAX;
+	uint8_t predictedClass;
 	for (uint16_t i = 0; i < meansSize/DATA_DIM; i++)
 	{
-		distance = nDimDistance(point, meansDimPtr);
-		incrementDimensionPtr(meansDimPtr);
-		//CDC_Fill_Buffer(&distance, 4);
-		//CDC_Fill_Buffer(&meansArray[1], 1);
+		distance = nDimDistance(point, meansDimPtr);			/* Find distance between test point and 1 means point */
+		if (distance < minDistance)
+		{
+			minDistance = distance;
+			predictedClass = classPtr[i];
+		}
+		incrementDimensionPtr(meansDimPtr);						/* Change the mean point to next one */
 	}
+	return predictedClass;
 }
 
 /**
@@ -308,7 +330,6 @@ void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSi
  * @ Param: This function accepts an array of pointers
  * @ Ret:	No return since it modifies the original pointer array
  */
-
 void incrementDimensionPtr(uint8_t **dimPtr)
 {
 	for (uint8_t j = 0; j < DATA_DIM; j++)
@@ -341,26 +362,6 @@ uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint)
 	 */
 	distance = (uint32_t) sqrt(sumOfSquares);
 	return distance;
-}
-
-//TODO: meanssize reduction to 8 bits
-uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes)
-{
-	uint32_t i = 0;
-	uint8_t distance;
-	uint8_t mindistance = 255;
-	uint8_t predictedClass = 0;
-	for (i = 0; i < classes; i++)
-	{
-		distance = abs(testPoint - *meansArray);
-		if (distance < mindistance)
-		{
-			mindistance = distance;
-			predictedClass = *meansArray;
-		}
-		meansArray++;
-	}
-	return predictedClass;
 }
 
 
