@@ -59,6 +59,8 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+static uint8_t DATA_DIM = 3;
+
 
 /* SendOverUSB = 0  --> Save sensors data on SDCard (enable with double click) */
 /* SendOverUSB = 1  --> Send sensors data via USB */
@@ -92,7 +94,10 @@ static void initializeAllSensors( void );
 
 /* Functions created by Prateek ----------------------------------------------*/
 uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes);
-
+void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize);
+void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize);
+uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint);
+void incrementDimensionPtr(uint8_t **dimPtr);
 
 /* Private functions ---------------------------------------------------------*/
  
@@ -173,11 +178,13 @@ int main( void )
  */
 uint32_t meansSize = 0;
 uint32_t testSize = 0;
-uint32_t usbTestDataSize = 0;
-uint8_t *usbTestptr;
+uint32_t usbCommTestSize = 0;
+uint8_t *usbCommTestPtr;
 uint8_t *meansptr;
 uint8_t *testptr;
 uint8_t *classes;
+uint8_t *meansDimensionPtr[DATA_DIM];
+uint8_t *testDimensionPtr[DATA_DIM];
 
 //
 
@@ -215,33 +222,41 @@ uint8_t *classes;
 		  		  meansptr = (uint8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
 		  		  read_data(meansptr);
 		  		  packetsReceived--;
+		  		  for (uint8_t i = 0; i < DATA_DIM; i++)
+		  		  {
+		  			  meansDimensionPtr[i] = meansptr + (i*meansSize)/DATA_DIM;
+		  		  }
+		  		  //CDC_Fill_Buffer(dimensionPtr[0], meansSize/3);
+		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
 		  		  break;
 		  	  case 'b' :
 		  		  testSize = get_sizeOfData();
 		  		  testptr = (uint8_t *) malloc(testSize);
 		  		  read_data(testptr);
 		  		  packetsReceived--;
-
-		  		  uint32_t j = 0;
+		  		  for (uint8_t i = 0; i < DATA_DIM; i++)
+		  		  {
+		  			  testDimensionPtr[i] = testptr + (i*testSize)/DATA_DIM;
+		  		  }
+		  		  kNNclassify (testptr, testSize, meansptr, meansSize);
+		  		  /*uint32_t j = 0;
 		  		  classes = (uint8_t *) malloc(testSize);
 		  		  for (j = 0; j < testSize; j++)
 		  		  {
 		  			  classes[j] = classify(*testptr, meansptr, meansSize);
 		  			  testptr++;
-		  		  }
-		  		  CDC_Fill_Buffer(classes, testSize);
+		  		  }*/
+		  		  //CDC_Fill_Buffer(classes, testSize);
 		  		  break;
 		  	  case 'c' :
-		  		  usbTestDataSize = get_sizeOfData();
-		  		  usbTestptr = (uint8_t *) malloc(usbTestDataSize);
-		  		  read_data(usbTestptr);
+		  		  usbCommTestSize = get_sizeOfData();
+		  		  usbCommTestPtr = (uint8_t *) malloc(usbCommTestSize);
+		  		  read_data(usbCommTestPtr);
 		  		  packetsReceived--;
-		  		  CDC_Fill_Buffer(usbTestptr, usbTestDataSize);
+		  		  CDC_Fill_Buffer(usbCommTestPtr, usbCommTestSize);
 		  		  break;
 		  }
 	  }
-
-
 
     // Go to Sleep
     __WFI();
@@ -249,6 +264,84 @@ uint8_t *classes;
   }
 }
 
+void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize)
+{
+	uint8_t *testDimPtr[DATA_DIM];
+	for (uint8_t i = 0; i < DATA_DIM; i++)
+	{
+		testDimPtr[i] = testdata + (i*testSize)/DATA_DIM;
+	}
+
+	for (uint32_t i = 0; i < testSize/DATA_DIM; i++)
+	{
+		//CDC_Fill_Buffer(*testDimPtr, 1);
+		calculateMinDistance(testDimPtr, meansdata, meansSize);
+		incrementDimensionPtr(testDimPtr);
+	}
+}
+
+void calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize)
+{
+	//CDC_Fill_Buffer(point[0], 1);
+
+	uint8_t *meansDimPtr[DATA_DIM];
+	for (uint8_t i = 0; i < DATA_DIM; i++)
+	{
+		meansDimPtr[i] = meansArray + (i*meansSize)/DATA_DIM;
+	}
+
+	uint32_t distance = 0;
+	for (uint16_t i = 0; i < meansSize/DATA_DIM; i++)
+	{
+		distance = nDimDistance(point, meansDimPtr);
+		incrementDimensionPtr(meansDimPtr);
+		//CDC_Fill_Buffer(&distance, 4);
+		//CDC_Fill_Buffer(&meansArray[1], 1);
+	}
+}
+
+/**
+ * @ Brief: This function increments every element in an array of pointers
+ * 			by one. This is required to increment every element in array of
+ * 			pointers (which are pointing to different dimensions) to be incremented
+ * 			Number of dimensions are given by the global var DATA_DIM
+ * @ Param: This function accepts an array of pointers
+ * @ Ret:	No return since it modifies the original pointer array
+ */
+
+void incrementDimensionPtr(uint8_t **dimPtr)
+{
+	for (uint8_t j = 0; j < DATA_DIM; j++)
+	{
+		dimPtr[j]++;
+	}
+}
+
+
+/**
+ * @ Brief: 	This function calculates the distance of one point from another point
+ * 				in an N-Dimensional space
+ * @ Param: 	The function takes in two arrays of pointers, each element of this array
+ * 				is pointing to the corresponding dimension of the point
+ * 				Eg. i'th element of the array a[i] points to the i'th dimension point
+ * @ReturnVal: 	This function returns the distance between two N-Dimensional points in
+ * 				in a uint32_t format
+ * @Caveat:		Loss of accuracy since everything in computed in int
+ */
+uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint)
+{
+	uint32_t sumOfSquares = 0;							/* Since this will always be positive it can be unsigned */
+	uint32_t distance = 0;
+	for (uint32_t i = 0; i < DATA_DIM; i++)				/* Loop through each dimension */
+	{
+		sumOfSquares = sumOfSquares + pow((int)(*testPoint[i] - *meansPoint[i]), 2);	/* Xi - Yi can go negative hence casted to int */
+	}
+	/* square root casted to uint32 which will simply ignore the decimal
+	 * part (i.e 5.99 and 5.01 will be same in this case
+	 */
+	distance = (uint32_t) sqrt(sumOfSquares);
+	return distance;
+}
 
 //TODO: meanssize reduction to 8 bits
 uint8_t classify (uint8_t testPoint, uint8_t *meansArray, uint32_t classes)
