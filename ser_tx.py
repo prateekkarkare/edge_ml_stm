@@ -3,11 +3,19 @@ import time
 import numpy
 import struct
 import math
+import sys
 
 #Connection settings
 port = "COM6"
 baud = 115200
 timeoutSeconds = 5
+
+#Global variables
+testSize = 10
+dimension = 3
+
+#Time out for reading from serial port
+timeout = time.time() + 5   # 5 secs from now
 
 """ Function to try open a serial port and return a serial object """
 def openSerialPort(port):
@@ -61,39 +69,37 @@ def createPacket(header, payload, verbose=False):
 	else:
 		return packet
 		
-		
-timeout = time.time() + 5   # 5 minutes from now
-def checkData(port):
+	
+def kNNTest():
 	ser = openSerialPort(port)
+	print "Executing kNN test on MCU with random data"
 	# Create test array of int8 by providing a range
-	test = numpy.random.randint(0, 100, (3, 10), dtype='int8')
+	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='int8')
 	Xmeans = numpy.int8([0,20,40,60,80,100])
 	Ymeans = numpy.int8([1,21,41,61,81,101])
 	Zmeans = numpy.int8([2,22,42,62,82,102])
 	means = numpy.vstack((Xmeans, Ymeans, Zmeans))
 	classes = numpy.int8(numpy.random.choice(len(Xmeans), len(Xmeans), replace=False))
-	classpkt = createPacket('c', classes, 1)
+	compute = numpy.int8([0])
+	
+	computepkt = createPacket('k', compute, 0)
+	classpkt = createPacket('c', classes, 0)
 	meanspkt = createPacket('a', means.flatten(), 1)
 	testpkt = createPacket('b', test.flatten(), 1)
 	classification = []
-	classify(test, means, classes)
-	#for point in test:
-	#	 classification.append(computeDistances(point, means)[0])
-	print "Writing data to MCU..."
-	ser.write(meanspkt)
-	time.sleep(1)
-	ser.write(classpkt)
-	time.sleep(1)
-	ser.write(testpkt)
-	time.sleep(1)
-	#print ser.inWaiting()
+	classification = kNNClassify(test, means, classes)
+	
+	
+	ser.write(meanspkt)		#Write means array to CPU
+	ser.write(classpkt)		#Send classes array
+	ser.write(testpkt)		#Send the array of testpoints
+	ser.write(computepkt)	#This is a signal which asks the MCU to compute the kNN classification
 	rxData = []
+	print "Waiting for MCU to respond..."
 	while True:
 		r = ser.read()
-		#print r
 		if (r != ''):
 			out = struct.unpack('b', r)
-			#print out
 			rxData.append(out[0])
 		if (time.time() > timeout):
 			break
@@ -101,28 +107,46 @@ def checkData(port):
 	print "MCU Classification: \n" + str(rxData)
 	print "Python classification: \n" + str(classification)
 	if ((classification == rxData)):
-		print "Equal"
+		print "kNN test passed"
 
-def classify(testArray, meansArray, classes):
-	for i in range(len(testArray[0])):
+''' This function perfoms the kNN classification given a means array of classes
+	and an array of test points and the array of classes'''
+def kNNClassify(testArray, meansArray, classes):
+	predictedClasses = []
+	for i in range(testSize):
 		point = [testArray[0][i], testArray[1][i], testArray[2][i]]
-		print computeDistances(point, meansArray, classes), point
+		predictedClasses.append(predictClass(point, meansArray, classes))
+	return predictedClasses
 
-def computeDistances(testPoint, meansArray, classes):
-	mindistance = 174
-	minmean = -1
-	predictedClass = -1
-	for i in range(len(meansArray[0])):
-		distance = numpy.int32(math.sqrt((testPoint[0] - meansArray[0][i])**2 + (testPoint[1] - meansArray[1][i])**2 + (testPoint[2] - meansArray[2][i])**2))
+''' This function takes in a point and a means array of classes 
+	and returns the predicted class for that point '''
+def predictClass(testPoint, meansArray, classes):
+	mindistance = sys.maxint
+	minmean = []
+	predictedClass = []
+	for i in range(len(classes)):
+		meansPoint = []
+		for d in range(dimension):
+			meansPoint.append(meansArray[d][i])
+		distance = nDimDistance(testPoint, meansPoint)
 		if (distance < mindistance):
 			mindistance = distance
-			minmean = [meansArray[0][i], meansArray[1][i], meansArray[2][i]]
+			for d in range(dimension):
+				minmean.append(meansArray[d][i])
 			predictedClass = classes[i]
-	return [minmean, mindistance, predictedClass]	
-		
+	return predictedClass	
+
+''' This function calculates the distance between two n dimensional points'''
+def nDimDistance(testPoint, meansArray):
+	squareDiff = 0
+	for d in range(dimension):
+		squareDiff = squareDiff + (testPoint[d] - meansArray[d])**2
+	distance = numpy.int32(math.sqrt(squareDiff))
+	return distance
+
 def main():
 #	checkUSBComm(port)
-	checkData(port)	
+	kNNTest()	
 	
 	
 		

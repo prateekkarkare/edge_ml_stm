@@ -228,11 +228,6 @@ uint8_t *predictedClassPtr;
 		  		  testptr = (uint8_t *) malloc(testSize);
 		  		  read_data(testptr);
 		  		  packetsReceived--;
-
-		  		  predictedClassPtr = (uint8_t *) malloc(testSize/DATA_DIM);
-		  		  kNNclassify (testptr, testSize, meansptr, meansSize, classptr, predictedClassPtr);
-
-		  		  CDC_Fill_Buffer(predictedClassPtr, testSize/DATA_DIM);
 		  		  break;
 		  	  case 'c' :										/* Fetching the Classes array */
 		  		  classSize = get_sizeOfData();					/* Get the size of pay-load */
@@ -241,6 +236,12 @@ uint8_t *predictedClassPtr;
 		  		  packetsReceived--;
 		  		  //CDC_Fill_Buffer(&classptr[1], 1);
 		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
+		  		  break;
+		  	  case 'k':
+		  		  packetsReceived--;
+		  		  predictedClassPtr = (uint8_t *) malloc(testSize/DATA_DIM);
+		  		  kNNclassify (testptr, testSize, meansptr, meansSize, classptr, predictedClassPtr);
+		  		  CDC_Fill_Buffer(predictedClassPtr, testSize/DATA_DIM);
 		  		  break;
 		  	  case 'x' :
 		  		  usbCommTestSize = get_sizeOfData();
@@ -258,6 +259,16 @@ uint8_t *predictedClassPtr;
   }
 }
 
+/**
+ * @ Brief: Classifies a test point based on k nearest neighbors
+ * @Param1:	POinter to the test data array
+ * @Param2: size of test data
+ * @Param3: Pointer to means data array
+ * @Param4: size of the means array
+ * @Param5: Pointer to array of original classes (class[i] carries the class of i'th means
+ * @Param6: Pointer to the predicted class array
+ * @Return: Modifies the predicted class array
+ */
 void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray)
 {
 	/* Create local pointer array which points to each the start of points for each dimension
@@ -287,11 +298,10 @@ void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint
  * 			 of the test point (eg. point = [x1, y1, z1, k1, u1]
  * 			 pointer[2] -----> [y1], pointer[3] -----> [z1]
  * @ Param2: pointer to means array
- * TODO @ Param3: Means size (this is required here because meansSize is not a global var
+ * @ Param3: Means size (this is required here because meansSize is not a global var)
  * @ Param3: Pointer to original class array
  * @ Return: returns the predicted class for that point
  */
-
 uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize, uint8_t *classPtr)
 {
 	/* Create local pointer array which points to each the start of points for each dimension
