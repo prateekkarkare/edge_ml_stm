@@ -11,8 +11,10 @@ baud = 115200
 timeoutSeconds = 5
 
 #Global variables
-testSize = 10
+testSize = 100
+meansSize = 5
 dimension = 3
+dataRange = 255
 
 #Time out for reading from serial port
 timeout = time.time() + 5   # 5 secs from now
@@ -59,28 +61,23 @@ def checkUSBComm(port):
 	else:
 		print "USB test failed"
 		print rxData
-
-def createPacket(header, payload, verbose=False):
-	packet = struct.pack('Hc%sb' % len(payload), len(payload), header, *payload)
-	if (verbose):
-		print "Created packet with " + str(len(payload)) + " bytes of data" 
-		print struct.unpack('Hc%sb' % len(payload), packet)
-		return packet
-	else:
-		return packet
 		
 	
 def kNNTest():
 	ser = openSerialPort(port)
 	print "Executing kNN test on MCU with random data"
 	# Create test array of int8 by providing a range
-	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='int8')
-	Xmeans = numpy.int8([0,20,40,60,80,100])
-	Ymeans = numpy.int8([1,21,41,61,81,101])
-	Zmeans = numpy.int8([2,22,42,62,82,102])
+	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='uint8')
+	
+	#Xmeans = numpy.uint8([0,20,40,60,80,100])
+	Xmeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
+	#Ymeans = numpy.uint8([1,21,41,61,81,101])
+	Ymeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
+	#Zmeans = numpy.uint8([2,22,42,62,82,102])
+	Zmeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
 	means = numpy.vstack((Xmeans, Ymeans, Zmeans))
-	classes = numpy.int8(numpy.random.choice(len(Xmeans), len(Xmeans), replace=False))
-	compute = numpy.int8([0])
+	classes = numpy.uint8(numpy.random.choice(meansSize, meansSize, replace=False))
+	compute = numpy.uint8([0])			#This packet asks the MCU to start its compute
 	
 	computepkt = createPacket('k', compute, 0)
 	classpkt = createPacket('c', classes, 0)
@@ -99,7 +96,7 @@ def kNNTest():
 	while True:
 		r = ser.read()
 		if (r != ''):
-			out = struct.unpack('b', r)
+			out = struct.unpack('B', r)
 			rxData.append(out[0])
 		if (time.time() > timeout):
 			break
@@ -140,9 +137,18 @@ def predictClass(testPoint, meansArray, classes):
 def nDimDistance(testPoint, meansArray):
 	squareDiff = 0
 	for d in range(dimension):
-		squareDiff = squareDiff + (testPoint[d] - meansArray[d])**2
+		squareDiff = squareDiff + (int(testPoint[d]) - int(meansArray[d]))**2
 	distance = numpy.int32(math.sqrt(squareDiff))
 	return distance
+	
+def createPacket(header, payload, verbose=False):
+	packet = struct.pack('Hc%sB' % len(payload), len(payload), header, *payload)
+	if (verbose):
+		print "Created packet with " + str(len(payload)) + " bytes of data" 
+		print struct.unpack('Hc%sB' % len(payload), packet)
+		return packet
+	else:
+		return packet
 
 def main():
 #	checkUSBComm(port)
