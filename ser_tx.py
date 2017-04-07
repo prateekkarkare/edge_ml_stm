@@ -11,9 +11,9 @@ baud = 115200
 timeoutSeconds = 5
 
 #Global variables
-testSize = 100
-meansSize = 5
-dimension = 3
+testSize = 30
+meansSize = 10
+dimension = 5
 dataRange = 255
 
 #Time out for reading from serial port
@@ -27,8 +27,6 @@ def openSerialPort(port):
 	except:
 		print "Cannot open serial port, check if another application is using the port"
 		return None
-		
-
 
 ''' Function to test USB communication '''
 ''' Packet structure --> (Size of data (int16), header (char), data array (8 bit integers)) ''' 
@@ -61,57 +59,77 @@ def checkUSBComm(port):
 	else:
 		print "USB test failed"
 		print rxData
-		
+
+''' Countdown timer display '''		
+def countdown(tim):
+	for i in xrange(tim,-1,-1):
+		time.sleep(1)
+		sys.stdout.write('\rWaiting ' + str(i) + ' seconds for MCU to respond')
+		sys.stdout.flush()
+	print '\n'
 	
-def kNNTest():
+'''Create the means data and the classes array to send to MCU'''
+def createSendData():
 	ser = openSerialPort(port)
-	print "Executing kNN test on MCU with random data"
-	# Create test array of int8 by providing a range
-	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='uint8')
+	print "Sending " + str(dimension) + " dimensional kNN data to MCU"
 	
+	############# Create data ########################
 	#Xmeans = numpy.uint8([0,20,40,60,80,100])
-	Xmeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
+	means = numpy.random.randint(0, 100, (dimension, meansSize), dtype='uint8')
 	#Ymeans = numpy.uint8([1,21,41,61,81,101])
-	Ymeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
 	#Zmeans = numpy.uint8([2,22,42,62,82,102])
-	Zmeans = numpy.random.randint(0, 100, (1, meansSize), dtype='uint8')
-	means = numpy.vstack((Xmeans, Ymeans, Zmeans))
+	#means = numpy.vstack((Xmeans, Ymeans, Zmeans))
 	classes = numpy.uint8(numpy.random.choice(meansSize, meansSize, replace=False))
-	compute = numpy.uint8([0])			#This packet asks the MCU to start its compute
 	
-	computepkt = createPacket('k', compute, 0)
-	classpkt = createPacket('c', classes, 0)
+	############## Create and send packets ###############
+	classpkt = createPacket('c', classes, 1)
 	meanspkt = createPacket('a', means.flatten(), 1)
-	testpkt = createPacket('b', test.flatten(), 1)
-	classification = []
-	classification = kNNClassify(test, means, classes)
-	
-	
 	ser.write(meanspkt)		#Write means array to CPU
 	ser.write(classpkt)		#Send classes array
+	ser.close()
+	return [means, classes]
+
+'''This function creates a random test data and checks MCu classification
+		and compares it to python classification'''
+def testkNNMCU(means, classes):
+	ser = openSerialPort(port)
+	compute = numpy.uint8([0])			#This packet asks the MCU to start its compute
+	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='uint8')
+	
+	computepkt = createPacket('k', compute, 0)
+	testpkt = createPacket('b', test.flatten(), 1)
+	
 	ser.write(testpkt)		#Send the array of testpoints
 	ser.write(computepkt)	#This is a signal which asks the MCU to compute the kNN classification
+	
+	classification = []
+	classification = kNNClassify(test, means, classes)
+	countdown(timeoutSeconds)
 	rxData = []
-	print "Waiting for MCU to respond..."
-	while True:
+#	while True:
+	while ser.inWaiting() > 0:
 		r = ser.read()
+		#print r
 		if (r != ''):
 			out = struct.unpack('B', r)
 			rxData.append(out[0])
-		if (time.time() > timeout):
-			break
-	ser.close()
+#		if (time.time() > timeout):
+#			break
+		#print rxData
 	print "MCU Classification: \n" + str(rxData)
 	print "Python classification: \n" + str(classification)
 	if ((classification == rxData)):
 		print "kNN test passed"
+	ser.close()
 
 ''' This function perfoms the kNN classification given a means array of classes
 	and an array of test points and the array of classes'''
 def kNNClassify(testArray, meansArray, classes):
 	predictedClasses = []
 	for i in range(testSize):
-		point = [testArray[0][i], testArray[1][i], testArray[2][i]]
+		point = []
+		for d in range(dimension):
+			point.append(testArray[d][i])
 		predictedClasses.append(predictClass(point, meansArray, classes))
 	return predictedClasses
 
@@ -152,9 +170,10 @@ def createPacket(header, payload, verbose=False):
 
 def main():
 #	checkUSBComm(port)
-	kNNTest()	
-	
-	
+	[means, classes] = createSendData()
+	i = 0
+	for i in range(3):
+		testkNNMCU(means, classes)
 		
 if __name__ == "__main__":
     main()

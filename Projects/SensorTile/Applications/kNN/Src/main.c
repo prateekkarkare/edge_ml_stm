@@ -59,7 +59,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-static uint8_t DATA_DIM = 3;
+static uint8_t DATA_DIM = 5;
 
 
 /* SendOverUSB = 0  --> Save sensors data on SDCard (enable with double click) */
@@ -242,6 +242,7 @@ uint8_t *predictedClassPtr;
 		  		  predictedClassPtr = (uint8_t *) malloc(testSize/DATA_DIM);
 		  		  kNNclassify (testptr, testSize, meansptr, meansSize, classptr, predictedClassPtr);
 		  		  CDC_Fill_Buffer(predictedClassPtr, testSize/DATA_DIM);
+		  		  free(testptr);
 		  		  break;
 		  	  case 'x' :
 		  		  usbCommTestSize = get_sizeOfData();
