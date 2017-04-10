@@ -11,9 +11,9 @@ baud = 115200
 timeoutSeconds = 5
 
 #Global variables
-testSize = 30
+testSize = 10
 meansSize = 10
-dimension = 5
+dimension = 10
 dataRange = 255
 
 #Time out for reading from serial port
@@ -82,8 +82,10 @@ def createSendData():
 	classes = numpy.uint8(numpy.random.choice(meansSize, meansSize, replace=False))
 	
 	############## Create and send packets ###############
+	numOfDimpkt = createPacket('d', numpy.uint8([dimension]), 1)
 	classpkt = createPacket('c', classes, 1)
 	meanspkt = createPacket('a', means.flatten(), 1)
+	ser.write(numOfDimpkt)	#This needs to be sent first ALWYAS
 	ser.write(meanspkt)		#Write means array to CPU
 	ser.write(classpkt)		#Send classes array
 	ser.close()
@@ -172,7 +174,7 @@ def main():
 #	checkUSBComm(port)
 	[means, classes] = createSendData()
 	i = 0
-	for i in range(3):
+	for i in range(1):
 		testkNNMCU(means, classes)
 		
 if __name__ == "__main__":

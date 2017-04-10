@@ -59,7 +59,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-static uint8_t DATA_DIM = 5;
+static uint8_t DATA_DIM = 3;
 
 
 /* SendOverUSB = 0  --> Save sensors data on SDCard (enable with double click) */
@@ -179,11 +179,13 @@ uint32_t meansSize = 0;
 uint32_t testSize = 0;
 uint32_t usbCommTestSize = 0;
 uint32_t classSize = 0;
+uint8_t dimGetterSize = 0;
 uint8_t *usbCommTestPtr;
 uint8_t *meansptr;
 uint8_t *testptr;
 uint8_t *classptr;
 uint8_t *predictedClassPtr;
+uint8_t *dimptr;
 //
 
   while (1)
@@ -234,8 +236,13 @@ uint8_t *predictedClassPtr;
 		  		  classptr = (uint8_t *) malloc(classSize);		/* Allocate memory for the class array to avoid garbles and overwrite */
 		  		  read_data(classptr);
 		  		  packetsReceived--;
-		  		  //CDC_Fill_Buffer(&classptr[1], 1);
-		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
+		  		  break;
+		  	  case 'd' :
+		  		  dimGetterSize = get_sizeOfData();
+		  		  dimptr = (uint8_t *) malloc(dimGetterSize);
+		  		  read_data(dimptr);
+		  		  packetsReceived--;
+		  		  DATA_DIM = *dimptr;
 		  		  break;
 		  	  case 'k':
 		  		  packetsReceived--;
