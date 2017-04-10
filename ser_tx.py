@@ -8,22 +8,25 @@ import sys
 #Connection settings
 port = "COM6"
 baud = 115200
-timeoutSeconds = 5
+timeoutms = 300
+delayAfterWrite = 100	#ms
 
 #Global variables
-testSize = 10
-meansSize = 10
-dimension = 10
+testSize = 20
+meansSize = 6
+dimension = 6
 dataRange = 255
 
 #Time out for reading from serial port
 timeout = time.time() + 5   # 5 secs from now
 
+target = open('report.txt', 'a')
+
 """ Function to try open a serial port and return a serial object """
 def openSerialPort(port):
 	try:
-		print "Serial port %s opened" % (port)
-		return serial.Serial(port, baud, timeout=timeoutSeconds)
+		#print "Serial port %s opened" % (port)
+		return serial.Serial(port, baud, timeout=timeoutms/1000)
 	except:
 		print "Cannot open serial port, check if another application is using the port"
 		return None
@@ -36,13 +39,13 @@ def checkUSBComm(port):
 	testData = numpy.int8(range(0,257))
 	# Construct a struct to send 
 	cmd = createPacket('x', testData, 1)
-	sentData = ser.write(cmd)
+	sentData = delaySerWrite(cmd, ser, delayAfterWrite)
 	print "Sent " + str(sentData-3) + " bytes of data for USB communication check" 
 	#print struct.unpack('Hc%sb' % len(testData), cmd)
 	rxData = []
 	# Wait for device to respond
-	print "Waiting " + str(timeoutSeconds) + " seconds for device to respond"
-	time.sleep(timeoutSeconds)
+	print "Waiting " + str(timeoutms) + " milli-seconds for device to respond"
+	time.sleep(timeoutms/1000)
 	print "Received " + str(ser.inWaiting()) + " bytes from MCU"
 	while ser.inWaiting() > 0:
 		r = ser.read()
@@ -63,8 +66,8 @@ def checkUSBComm(port):
 ''' Countdown timer display '''		
 def countdown(tim):
 	for i in xrange(tim,-1,-1):
-		time.sleep(1)
-		sys.stdout.write('\rWaiting ' + str(i) + ' seconds for MCU to respond')
+		time.sleep(0.001)
+		#sys.stdout.write('Waiting %i milli-seconds for MCU to respond\r' % tim)
 		sys.stdout.flush()
 	print '\n'
 	
@@ -85,12 +88,16 @@ def createSendData():
 	numOfDimpkt = createPacket('d', numpy.uint8([dimension]), 1)
 	classpkt = createPacket('c', classes, 1)
 	meanspkt = createPacket('a', means.flatten(), 1)
-	ser.write(numOfDimpkt)	#This needs to be sent first ALWYAS
-	ser.write(meanspkt)		#Write means array to CPU
-	ser.write(classpkt)		#Send classes array
+	delaySerWrite(numOfDimpkt, ser, delayAfterWrite)	#This needs to be sent first ALWYAS
+	delaySerWrite(meanspkt, ser, delayAfterWrite)		#Write means array to CPU
+	delaySerWrite(classpkt, ser, delayAfterWrite)		#Send classes array
 	ser.close()
 	return [means, classes]
 
+def delaySerWrite(data, serialHandle, delayms):
+	serialHandle.write(data)
+	time.sleep(delayms/1000.0)
+	
 '''This function creates a random test data and checks MCu classification
 		and compares it to python classification'''
 def testkNNMCU(means, classes):
@@ -99,14 +106,14 @@ def testkNNMCU(means, classes):
 	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='uint8')
 	
 	computepkt = createPacket('k', compute, 0)
-	testpkt = createPacket('b', test.flatten(), 1)
+	testpkt = createPacket('b', test.flatten(), 0)
 	
-	ser.write(testpkt)		#Send the array of testpoints
-	ser.write(computepkt)	#This is a signal which asks the MCU to compute the kNN classification
+	delaySerWrite(testpkt, ser, delayAfterWrite)		#Send the array of testpoints
+	delaySerWrite(computepkt, ser, delayAfterWrite)	#This is a signal which asks the MCU to compute the kNN classification
 	
 	classification = []
 	classification = kNNClassify(test, means, classes)
-	countdown(timeoutSeconds)
+	countdown(timeoutms)
 	rxData = []
 #	while True:
 	while ser.inWaiting() > 0:
@@ -119,9 +126,17 @@ def testkNNMCU(means, classes):
 #			break
 		#print rxData
 	print "MCU Classification: \n" + str(rxData)
+	target.write("MCU Classification: \n" + str(rxData))
 	print "Python classification: \n" + str(classification)
+	target.write("Python classification: \n" + str(classification))
 	if ((classification == rxData)):
-		print "kNN test passed"
+		print "kNN test passed\n"
+		target.write("kNN test passed\n")
+		return [0, rxData, classification]
+	else:
+		print "Fail!\n"
+		target.write("Fail!\n")
+		return [1, rxData, classification]
 	ser.close()
 
 ''' This function perfoms the kNN classification given a means array of classes
@@ -174,8 +189,16 @@ def main():
 #	checkUSBComm(port)
 	[means, classes] = createSendData()
 	i = 0
-	for i in range(1):
-		testkNNMCU(means, classes)
-		
+	testCount = 43200
+	failCount = 0
+	target.write("Running kNN random batch test %i times\n" % testCount)
+	print "Running kNN random batch test %i times\n" % testCount
+	for i in range(testCount):
+		print "Test vector %i" % i
+		if (testkNNMCU(means, classes)[0]):
+			failCount = failCount + 1
+	print "\nkNN random batch test passed " + str(testCount - failCount) + "/" +  str(testCount) + " times"
+	target.write("\nkNN random batch test passed " + str(testCount - failCount) + "/" +  str(testCount) + " times")  
+	target.close()
 if __name__ == "__main__":
     main()

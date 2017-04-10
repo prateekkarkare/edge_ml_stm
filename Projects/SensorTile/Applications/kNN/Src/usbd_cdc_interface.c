@@ -283,7 +283,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   */
 void receive_complete(void)
 {
-	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[packet_start+1] << 8);
+	/*TODO: packet_start + 1 might overflow*/
+	sizeOfData = USB_RxBuffer[packet_start] + (USB_RxBuffer[(packet_start+1)%APP_RX_DATA_SIZE] << 8);
 	uint8_t prev_numpac=packetsReceived;
 	if (USB_RxBufferStart_idx == (packet_start + sizeOfData + headerSize) % APP_RX_DATA_SIZE)
 	{
@@ -358,100 +359,6 @@ void read_data(uint8_t *data_array)
 		memcpy((uint8_t *)&data_array[-ind], (uint8_t *)&USB_RxBuffer[0], ((int16_t) sizeOfData + ind));
 	}
 }
-
-
-
-/*
- * the Read_Rx_Buffer() routine returns any characters that have been placed into
- * the RxBuffer by the USB receive FIFO process which emulates the UART
- * DMA circular buffer
- *
- * The UART receiver is set up with DMA in circular buffer mode.  This means that
- * it will continue receiving characters forever regardless of whether any are
- * taken out.  It will just write over the previous buffer if it overflows
- *
- * To know whether there are any characters in the buffer we look at the counter
- * register in the DMA channel assigned to the UART Rx buffer.  This count starts
- * at the size of the transfer and is decremented after a transfer to memory is done.
- *
- * We maintain a mirror DMA count register value readIndex.  If they are the same no data is
- * available.  If they are different, the DMA has decremented its counter
- * so we transfer data until they are the same or the rx buffer is full.  We
- * wrap our down counter the same way the DMA does in circular mode.
- */
-/*
-uint8_t Read_Rx_Buffer(char *instring, uint32_t count)
-{
-    uint32_t bytesread = 0;
-//  extern USBD_CDC_ItfTypeDef  USBD_Interface_fops_FS;
-    if(count > bytesread)
-    {
-        while(readIndex == (APP_RX_DATA_SIZE - USB_RxBufferStart_idx)) {}
-        {
-            while((count > bytesread) & (readIndex !=(APP_RX_DATA_SIZE - USB_RxBufferStart_idx )))
-            {
-                instring[bytesread] = USB_RxBuffer[APP_RX_DATA_SIZE - readIndex];
-                if(readIndex == (0))
-                    readIndex = APP_RX_DATA_SIZE;
-                else readIndex--;
-                bytesread++;
-            }
-        }
-    }
-    HAL_Delay(500);
-    BSP_LED_Off(LED1);
-    return (int)bytesread;
-}
-*/
-/*
-uint8_t Read_Header()
-{
-	uint8_t header = USB_RxBuffer[4];
-	return header;
-}
-
-uint32_t Read_SizeOfData(void)
-{
-	int dataSize = USB_RxBuffer[0] + (USB_RxBuffer[1] << 8) + (USB_RxBuffer[2] << 16) + (USB_RxBuffer[3] << 24);
-	return dataSize;
-}
-*/
-
-/*
-uint8_t Read_Rx_Buffer(char *instring)
-{
-    uint32_t bytesread = 0;
-//  extern USBD_CDC_ItfTypeDef  USBD_Interface_fops_FS;
-        while(readIndex !=(APP_RX_DATA_SIZE - USB_RxBufferStart_idx ))
-        {
-            instring[bytesread] = USB_RxBuffer[APP_RX_DATA_SIZE - readIndex];
-            if(readIndex == (0))
-                readIndex = APP_RX_DATA_SIZE;
-            else readIndex--;
-            bytesread++;
-        }
-    return (int)bytesread;
-}
-
-uint8_t Read_Rx_Buffer(char *rxString)
-{
-	uint16_t byteCount = 0;
-	//memset(rxString, 0, strlen(rxString));
-	while(readIndex == (USB_RxBufferStart_idx)){}
-	{
-		while(readIndex != USB_RxBufferStart_idx)
-		{
-			rxString[byteCount] = USB_RxBuffer[readIndex];
-			if(readIndex == APP_RX_DATA_SIZE)
-				readIndex = 0;
-			else
-				readIndex++;
-			byteCount++;
-		}
-	}
-	return (int)byteCount;
-}
-*/
 
 /**
   * @brief  TIM_Config: Configure TIMx timer

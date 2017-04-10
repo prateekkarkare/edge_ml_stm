@@ -218,30 +218,28 @@ uint8_t *dimptr;
 		  switch (header)
 		  {
 		  	  case 'a' :										/* Fetching the Means array */
+		  		  packetsReceived--;
 		  		  meansSize = get_sizeOfData();					/* Get the size of pay-load */
 		  		  meansptr = (uint8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
 		  		  read_data(meansptr);
-		  		  packetsReceived--;
-		  		  //CDC_Fill_Buffer(dimensionPtr[0], meansSize/3);
-		  		  //CDC_Fill_Buffer(meansDimensionPtr[1], meansSize);
 		  		  break;
 		  	  case 'b' :
+		  		  packetsReceived--;
 		  		  testSize = get_sizeOfData();
 		  		  testptr = (uint8_t *) malloc(testSize);
 		  		  read_data(testptr);
-		  		  packetsReceived--;
 		  		  break;
 		  	  case 'c' :										/* Fetching the Classes array */
+		  		  packetsReceived--;
 		  		  classSize = get_sizeOfData();					/* Get the size of pay-load */
 		  		  classptr = (uint8_t *) malloc(classSize);		/* Allocate memory for the class array to avoid garbles and overwrite */
 		  		  read_data(classptr);
-		  		  packetsReceived--;
 		  		  break;
 		  	  case 'd' :
+		  		  packetsReceived--;
 		  		  dimGetterSize = get_sizeOfData();
 		  		  dimptr = (uint8_t *) malloc(dimGetterSize);
 		  		  read_data(dimptr);
-		  		  packetsReceived--;
 		  		  DATA_DIM = *dimptr;
 		  		  break;
 		  	  case 'k':
@@ -249,6 +247,7 @@ uint8_t *dimptr;
 		  		  predictedClassPtr = (uint8_t *) malloc(testSize/DATA_DIM);
 		  		  kNNclassify (testptr, testSize, meansptr, meansSize, classptr, predictedClassPtr);
 		  		  CDC_Fill_Buffer(predictedClassPtr, testSize/DATA_DIM);
+		  		  free(predictedClassPtr);
 		  		  free(testptr);
 		  		  break;
 		  	  case 'x' :
