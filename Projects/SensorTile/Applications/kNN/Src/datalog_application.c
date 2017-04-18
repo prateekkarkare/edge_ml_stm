@@ -178,7 +178,7 @@ void Accelero_Sensor_Handler( void *handle )
   int32_t d1, d2;
   
   BSP_ACCELERO_Get_Instance( handle, &id );
-  
+
   BSP_ACCELERO_IsInitialized( handle, &status );
   
   if ( status == 1 )
@@ -192,7 +192,7 @@ void Accelero_Sensor_Handler( void *handle )
     
     if(SendOverUSB) /* Write data on the USB */
     {
-      sprintf( dataOut, "\n\rACC_X: %d, ACC_Y: %d, ACC_Z: %d", (int)acceleration.AXIS_X, (int)acceleration.AXIS_Y, (int)acceleration.AXIS_Z );
+      sprintf( dataOut, "\rACC_X: %d, ACC_Y: %d, ACC_Z: %d\n", (int)acceleration.AXIS_X, (int)acceleration.AXIS_Y, (int)acceleration.AXIS_Z );
       CDC_Fill_Buffer(( uint8_t * )dataOut, strlen( dataOut ));   
       
       if ( verbose == 1 )
@@ -203,7 +203,7 @@ void Accelero_Sensor_Handler( void *handle )
         }
         else
         {
-          sprintf( dataOut, "WHO AM I address[%d]: 0x%02X\n", id, who_am_i );
+          sprintf( dataOut, "\rWHO AM I address[%d]: 0x%02X\n", id, who_am_i );
         }
         
         CDC_Fill_Buffer(( uint8_t * )dataOut, strlen( dataOut ));
@@ -215,7 +215,7 @@ void Accelero_Sensor_Handler( void *handle )
         else
         {
           floatToInt( odr, &d1, &d2, 3 );
-          sprintf( dataOut, "ODR[%d]: %d.%03d Hz\n", (int)id, (int)d1, (int)d2 );
+          sprintf( dataOut, "\rODR[%d]: %d.%03d Hz\n", (int)id, (int)d1, (int)d2 );
         }
         
         CDC_Fill_Buffer(( uint8_t * )dataOut, strlen( dataOut ));
@@ -227,10 +227,11 @@ void Accelero_Sensor_Handler( void *handle )
         else
         {
           floatToInt( fullScale, &d1, &d2, 3 );
-          sprintf( dataOut, "FS[%d]: %d.%03d g\n", (int)id, (int)d1, (int)d2 );
+          sprintf( dataOut, "\rFS[%d]: %d.%03d g\n\n", (int)id, (int)d1, (int)d2 );
         }
         
         CDC_Fill_Buffer(( uint8_t * )dataOut, strlen( dataOut ));
+
       }
     }
     else if(SD_Log_Enabled) /* Write data to the file on the SDCard */
@@ -240,6 +241,38 @@ void Accelero_Sensor_Handler( void *handle )
       res = f_write(&MyFile, dataOut, size, (void *)&byteswritten);
     }
   }
+}
+
+
+/**
+* @brief  Handles the accelerometer axes data getting/sending
+* @param  handle the device handle
+* @retval array of XYZ accelerations
+*/
+void Accelero_Sensor_Handler_kNN( void *handle, uint8_t *accXYZ )
+{
+  uint8_t id;
+  SensorAxes_t acceleration;
+  uint8_t status;
+
+  BSP_ACCELERO_Get_Instance( handle, &id );
+
+  BSP_ACCELERO_IsInitialized( handle, &status );
+
+  if ( status == 1 )
+  {
+    if ( BSP_ACCELERO_Get_Axes( handle, &acceleration ) == COMPONENT_ERROR )
+    {
+      acceleration.AXIS_X = 0;
+      acceleration.AXIS_Y = 0;
+      acceleration.AXIS_Z = 0;
+    }
+
+    accXYZ[0] = (uint8_t) acceleration.AXIS_X;
+    accXYZ[1] = (uint8_t) acceleration.AXIS_Y;
+    accXYZ[2] = (uint8_t) acceleration.AXIS_Z;
+  }
+
 }
 
 

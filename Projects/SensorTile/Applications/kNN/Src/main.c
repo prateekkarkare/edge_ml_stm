@@ -53,18 +53,21 @@
 
 /* Private define ------------------------------------------------------------*/
 
-/* Data acquisition period [ms] */
-#define DATA_PERIOD_MS (2000)
+/* Data acquisition frequency [hz] */
+#define DATA_FREQ_HZ (1)
+
 //#define NOT_DEBUGGING
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 static uint8_t DATA_DIM = 3;
-
+uint32_t DATA_PERIOD_MS = 1000/DATA_FREQ_HZ;
 
 /* SendOverUSB = 0  --> Save sensors data on SDCard (enable with double click) */
 /* SendOverUSB = 1  --> Send sensors data via USB */
 uint8_t SendOverUSB = 1;
+
+static char dataOut[256];
 
 USBD_HandleTypeDef  USBD_Device;
 static volatile uint8_t MEMSInterrupt = 0;
@@ -93,10 +96,10 @@ static void RTC_TimeStampConfig( void );
 static void initializeAllSensors( void );
 
 /* Functions created by Prateek ----------------------------------------------*/
-void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray);
-uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize, uint8_t *classPtr);
-uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint);
-void incrementDimensionPtr(uint8_t **dimPtr);
+void kNNclassify (int8_t *testdata, uint32_t testSize, int8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray);
+uint8_t calculateMinDistance(int8_t **point, int8_t *meansArray, uint32_t meansSize, uint8_t *classPtr);
+uint32_t nDimDistance(int8_t **testPoint, int8_t **meansPoint);
+void incrementDimensionPtr(int8_t **dimPtr);
 
 /* Private functions ---------------------------------------------------------*/
  
@@ -107,6 +110,22 @@ void incrementDimensionPtr(uint8_t **dimPtr);
   */
 int main( void )
 {
+
+  /** Initialize variables required for kNN **/
+  uint32_t meansSize = 0;
+  uint32_t testSize = 0;
+  uint32_t usbCommTestSize = 0;
+  uint32_t classSize = 0;
+  uint8_t dimGetterSize = 0;
+  uint8_t *usbCommTestPtr;
+  int8_t *meansptr;
+  int8_t *testptr;
+  uint8_t *classptr;
+  uint8_t *predictedClassPtr;
+  uint8_t *dimptr;
+
+  int8_t accelXYZ[3] = {0};
+
   //initialise_monitor_handles();
   uint32_t msTick, msTickPrev = 0;
   uint8_t doubleTap = 0;
@@ -172,25 +191,9 @@ int main( void )
   //Just enable Accelerometer
   BSP_ACCELERO_Sensor_Enable( LSM6DSM_X_0_handle );
 
-/*********************************************
- TODO: need to get these variables at the right places
- */
-uint32_t meansSize = 0;
-uint32_t testSize = 0;
-uint32_t usbCommTestSize = 0;
-uint32_t classSize = 0;
-uint8_t dimGetterSize = 0;
-uint8_t *usbCommTestPtr;
-uint8_t *meansptr;
-uint8_t *testptr;
-uint8_t *classptr;
-uint8_t *predictedClassPtr;
-uint8_t *dimptr;
-//
-
   while (1)
   {
-/*
+
     // Get sysTick value and check if it's time to execute the task
     msTick = HAL_GetTick();
     if(msTick % DATA_PERIOD_MS == 0 && msTickPrev != msTick)
@@ -206,11 +209,13 @@ uint8_t *dimptr;
         BSP_LED_On(LEDSWD);
       }
 #endif
+
+      //RTC_Handler( &RtcHandle );
+      //Accelero_Sensor_Handler_kNN( LSM6DSM_X_0_handle , accelXYZ );
+      //sprintf( dataOut, "\rACC_X_kNN: %d, ACC_Y_kNN: %d, ACC_Z_kNN: %d\n", accelXYZ[0], accelXYZ[1], accelXYZ[2] );
+      //CDC_Fill_Buffer((uint8_t *)dataOut, strlen(dataOut));
+      //Accelero_Sensor_Handler( LSM6DSM_X_0_handle );
     }
-      RTC_Handler( &RtcHandle );
-      
-      Accelero_Sensor_Handler( LSM6DSM_X_0_handle );
-      */
 
 	  if (packetsReceived > 0)
 	  {
@@ -220,13 +225,13 @@ uint8_t *dimptr;
 		  	  case 'a' :										/* Fetching the Means array */
 		  		  packetsReceived--;
 		  		  meansSize = get_sizeOfData();					/* Get the size of pay-load */
-		  		  meansptr = (uint8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
+		  		  meansptr = (int8_t *) malloc(meansSize);		/* Allocate memory for the means array to avoid garbles and overwrite */
 		  		  read_data(meansptr);
 		  		  break;
 		  	  case 'b' :
 		  		  packetsReceived--;
 		  		  testSize = get_sizeOfData();
-		  		  testptr = (uint8_t *) malloc(testSize);
+		  		  testptr = (int8_t *) malloc(testSize);
 		  		  read_data(testptr);
 		  		  break;
 		  	  case 'c' :										/* Fetching the Classes array */
@@ -262,7 +267,6 @@ uint8_t *dimptr;
 
     // Go to Sleep
     __WFI();
-
   }
 }
 
@@ -276,7 +280,7 @@ uint8_t *dimptr;
  * @Param6: Pointer to the predicted class array
  * @Return: Modifies the predicted class array
  */
-void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray)
+void kNNclassify (int8_t *testdata, uint32_t testSize, int8_t *meansdata, uint32_t meansSize, uint8_t *classes, uint8_t *predictedClassArray)
 {
 	/* Create local pointer array which points to each the start of points for each dimension
 	 * Ex. [x1 x2 x3 y4 y1 y2 y3 y4 z1 z2 z3 z4 ...... k1 k2 k3 k4]
@@ -284,7 +288,7 @@ void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint
 	 * *localPointerArray[1] ----(points to)---> y1
 	 * *localPointerArray[2] ----(points to)---> z1
 	 */
-	uint8_t *testDimPtr[DATA_DIM];
+	int8_t *testDimPtr[DATA_DIM];
 	for (uint8_t i = 0; i < DATA_DIM; i++)
 	{
 		testDimPtr[i] = testdata + (i*testSize)/DATA_DIM;
@@ -309,7 +313,7 @@ void kNNclassify (uint8_t *testdata, uint32_t testSize, uint8_t *meansdata, uint
  * @ Param3: Pointer to original class array
  * @ Return: returns the predicted class for that point
  */
-uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t meansSize, uint8_t *classPtr)
+uint8_t calculateMinDistance(int8_t **point, int8_t *meansArray, uint32_t meansSize, uint8_t *classPtr)
 {
 	/* Create local pointer array which points to each the start of points for each dimension
 	 * Ex. [x1 x2 x3 y4 y1 y2 y3 y4 z1 z2 z3 z4 ...... k1 k2 k3 k4]
@@ -317,7 +321,7 @@ uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t mean
 	 * *localPointerArray[1] ----(points to)---> y1
 	 * *localPointerArray[2] ----(points to)---> z1
 	 */
-	uint8_t *meansDimPtr[DATA_DIM];
+	int8_t *meansDimPtr[DATA_DIM];
 	for (uint8_t i = 0; i < DATA_DIM; i++)
 	{
 		meansDimPtr[i] = meansArray + (i*meansSize)/DATA_DIM;
@@ -347,7 +351,7 @@ uint8_t calculateMinDistance(uint8_t **point, uint8_t *meansArray, uint32_t mean
  * @ Param: This function accepts an array of pointers
  * @ Ret:	No return since it modifies the original pointer array
  */
-void incrementDimensionPtr(uint8_t **dimPtr)
+void incrementDimensionPtr(int8_t **dimPtr)
 {
 	for (uint8_t j = 0; j < DATA_DIM; j++)
 	{
@@ -366,7 +370,7 @@ void incrementDimensionPtr(uint8_t **dimPtr)
  * 				in a uint32_t format
  * @Caveat:		Loss of accuracy since everything in computed in int
  */
-uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint)
+uint32_t nDimDistance(int8_t **testPoint, int8_t **meansPoint)
 {
 	uint32_t sumOfSquares = 0;							/* Since this will always be positive it can be unsigned */
 	uint32_t distance = 0;
@@ -380,7 +384,6 @@ uint32_t nDimDistance(uint8_t **testPoint, uint8_t **meansPoint)
 	distance = (uint32_t) sqrt(sumOfSquares);
 	return distance;
 }
-
 
 /**
 * @brief  Initialize all sensors

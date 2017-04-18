@@ -78,7 +78,7 @@ def createSendData():
 	
 	############# Create data ########################
 	#Xmeans = numpy.uint8([0,20,40,60,80,100])
-	means = numpy.random.randint(0, 100, (dimension, meansSize), dtype='uint8')
+	means = numpy.random.randint(-128, 127, (dimension, meansSize), dtype='int8')
 	#Ymeans = numpy.uint8([1,21,41,61,81,101])
 	#Zmeans = numpy.uint8([2,22,42,62,82,102])
 	#means = numpy.vstack((Xmeans, Ymeans, Zmeans))
@@ -103,7 +103,7 @@ def delaySerWrite(data, serialHandle, delayms):
 def testkNNMCU(means, classes):
 	ser = openSerialPort(port)
 	compute = numpy.uint8([0])			#This packet asks the MCU to start its compute
-	test = numpy.random.randint(0, 100, (dimension, testSize), dtype='uint8')
+	test = numpy.random.randint(-128, 127, (dimension, testSize), dtype='int8')
 	
 	computepkt = createPacket('k', compute, 0)
 	testpkt = createPacket('b', test.flatten(), 0)
@@ -120,7 +120,7 @@ def testkNNMCU(means, classes):
 		r = ser.read()
 		#print r
 		if (r != ''):
-			out = struct.unpack('B', r)
+			out = struct.unpack('b', r)
 			rxData.append(out[0])
 #		if (time.time() > timeout):
 #			break
@@ -177,10 +177,10 @@ def nDimDistance(testPoint, meansArray):
 	return distance
 	
 def createPacket(header, payload, verbose=False):
-	packet = struct.pack('Hc%sB' % len(payload), len(payload), header, *payload)
+	packet = struct.pack('Hc%sb' % len(payload), len(payload), header, *payload)
 	if (verbose):
 		print "Created packet with " + str(len(payload)) + " bytes of data" 
-		print struct.unpack('Hc%sB' % len(payload), packet)
+		print struct.unpack('Hc%sb' % len(payload), packet)
 		return packet
 	else:
 		return packet
@@ -189,7 +189,7 @@ def main():
 #	checkUSBComm(port)
 	[means, classes] = createSendData()
 	i = 0
-	testCount = 43200
+	testCount = 10
 	failCount = 0
 	target.write("Running kNN random batch test %i times\n" % testCount)
 	print "Running kNN random batch test %i times\n" % testCount
@@ -200,5 +200,7 @@ def main():
 	print "\nkNN random batch test passed " + str(testCount - failCount) + "/" +  str(testCount) + " times"
 	target.write("\nkNN random batch test passed " + str(testCount - failCount) + "/" +  str(testCount) + " times")  
 	target.close()
+	
 if __name__ == "__main__":
     main()
+	

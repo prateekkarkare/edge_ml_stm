@@ -52,6 +52,13 @@ void Humidity_Sensor_Handler( void *handle );
 void floatToInt( float in, int32_t *out_int, int32_t *out_dec, int32_t dec_prec );
 void Gas_Gauge_Handler( void *handle );
 
+/********************************************
+ * Custom functions
+ */
+
+void Accelero_Sensor_Handler_kNN( void *handle, uint8_t *accXYZ );
+
+
 
 #ifdef __cplusplus
 }
